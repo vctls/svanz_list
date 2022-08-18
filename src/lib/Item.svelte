@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-check
   import { createEventDispatcher } from "svelte";
-  import type ItemInterface from "./Item";
+  import type ItemInterface from "./ItemInterface";
 
   const dispatch = createEventDispatcher();
 
@@ -52,6 +52,8 @@
     text-decoration: line-through;
   }
 
+  /*Class added programmatically, undetected by IDE.*/
+  /*noinspection CssUnusedSymbol*/
   .filtered {
     display: none;
   }
