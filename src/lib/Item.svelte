@@ -1,7 +1,7 @@
 <script lang="ts">
   // @ts-check
   import { createEventDispatcher } from "svelte";
-  import type ItemInterface from "./Item";
+  import type ItemInterface from "./ItemInterface";
 
   const dispatch = createEventDispatcher();
 
@@ -22,12 +22,11 @@
 
 <li class={filtered}>
   <span>
-    <span
+    <button
       on:click={() => edit(item.name)}
       class="edit"
       id="{item.name}_edit"
-      role="button"
-      tabindex="0">📝</span
+      tabindex="0">📝</button
     >
     <input
       {checked}
@@ -38,12 +37,11 @@
     />
     <label for="{item.name}_done" class:checked={item.done}>{item.name}</label>
   </span>
-  <span
+  <button
     on:click={() => remove(item.name)}
     class="delete"
     id="{item.name}_delete"
-    role="button"
-    tabindex="0">❌</span
+    tabindex="0">❌</button
   >
 </li>
 

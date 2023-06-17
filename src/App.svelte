@@ -4,9 +4,10 @@
   import Item from "./lib/Item.svelte";
   import store from "./lib/store";
   import type ItemInterface from "./lib/ItemInterface";
-
+  
   let name: string;
   let items: ItemInterface[] = [];
+
 
   // Recover items from local storage.
   store.subscribe((storedItems) => {
