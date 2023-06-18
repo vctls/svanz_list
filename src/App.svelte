@@ -5,6 +5,7 @@
   import { store } from "./lib/supabase_store";
   import type ItemInterface from "./lib/ItemInterface";
   import { supabase } from "./lib/db";
+    import QrCode from "$lib/QRCode.svelte";
 
   let name: string;
   let items: ItemInterface[] = [];
@@ -169,6 +170,7 @@
   {:catch error}
     <p>Something went wrong: {error.message}</p>
   {/await}
+  <QrCode></QrCode>
 </main>
 
 <style>
