@@ -2,26 +2,14 @@
   // @ts-check
   import Header from "./lib/Header.svelte";
   import Item from "./lib/Item.svelte";
-  import store from "./lib/store";
+  import store from "./lib/supabase_store";
   import type ItemInterface from "./lib/ItemInterface";
-  
+  import { supabase } from "./lib/db";
+
   let name: string;
   let items: ItemInterface[] = [];
 
-
-  // Recover items from local storage.
-  store.subscribe((storedItems) => {
-    items = storedItems;
-  });
-
-  // Reactively store the items when they change.
-  $: store.set(items);
-
-  const getIndex = (name: string): number => {
-    return items.findIndex((item) => item.name === name);
-  };
-
-  const sort = (items: ItemInterface[], lastIndex: number): void => {
+  const sort = (): void => {
     items.sort((a, b) => {
       if (a.done < b.done) {
         return -1;
@@ -33,36 +21,112 @@
     });
   };
 
-  const add = (): void => {
-    const index = items.findIndex((item) => item.name === name);
-    if (name && index === -1) {
-      items = [...items, { name, done: false, id: self.crypto.randomUUID() }];
-      name = "";
-    }
+  // Recover items from store.
+  store.subscribe((storedItems) => {
+    items = storedItems;
+    sort();
+  });
+
+  const subscription = supabase
+    .channel("any")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "*",
+        table: "item",
+      },
+      (payload) => {
+        console.log("Changes received!", payload);
+        // TODO Do something with the changes.
+        if (payload.eventType === "DELETE") {
+          const index = getIndex(payload.old.id);
+          if (index !== -1) {
+            items.splice(getIndex(payload.old.id), 1);
+            items = items;
+          }
+        }
+        if (payload.eventType === "UPDATE") {
+          const index = getIndex(payload.old.id);
+          if (index !== -1) {
+            // FIXME The checkbox doesn't change.
+            items[index].done = payload.new.done;
+          }
+        }
+        if (payload.eventType === "INSERT") {
+          items = [
+            { name: payload.new.name, done: false, id: payload.new.id },
+            ...items,
+          ];
+        }
+      }
+    )
+    .subscribe();
+  console.log(subscription);
+
+  const getIndex = (id: string): number => {
+    return items.findIndex((item) => item.id === id);
   };
 
-  const remove = (index: number): void => {
-    items.splice(index, 1);
+  const add = async () => {
+    const index = items.findIndex((item) => item.name === name);
+    if (!name || index !== -1) {
+      return;
+    }
+    const id = self.crypto.randomUUID();
+    const { data, error } = await supabase
+      .from("item")
+      .insert([{ id: id, name: name }]);
+    if (error) {
+      console.log(error);
+      return;
+    }
+    items = [{ name, done: false, id: id }, ...items];
+    name = "";
+  };
+
+  const remove = async (id: string) => {
+    const { data, error } = await supabase
+      .from("item")
+      .delete()
+      .match({ id: id });
+    if (error) {
+      console.log(error);
+      return;
+    }
+    items.splice(getIndex(id), 1);
+    items = items;
+  };
+
+  const setDone = async (id: string) => {
+    const index = getIndex(id);
+    const item = items[index];
+    const { data, error } = await supabase
+      .from("item")
+      .update({ done: !item.done })
+      .match({ id: id });
+    if (error) {
+      console.log(error);
+      return;
+    }
+    item.done = !item.done;
+    sort();
     items = items;
   };
 
   const removeHandler = (event: CustomEvent): void => {
-    remove(getIndex(event.detail.name));
+    remove(event.detail.id);
   };
 
   const editHandler = (event: CustomEvent): void => {
-    const index = getIndex(event.detail.name);
+    const index = getIndex(event.detail.id);
     name = items[index].name;
-    remove(index);
+    remove(event.detail.id);
     document.getElementById("name")?.focus();
   };
 
   const doneHandler = (event: CustomEvent) => {
-    const index = getIndex(event.detail.name);
-    const item = items[index];
-    item.done = !item.done;
-    sort(items, index);
-    items = items;
+    setDone(event.detail.id);
   };
 
   const filter = (item: { name: string }, name: string) =>

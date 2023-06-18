@@ -45,6 +45,11 @@ h1 {
   padding: 2em;
 }
 
+label {
+  display: inline;
+  width: 100%;
+}
+
 button, input {
   border-radius: 8px;
   border: 1px solid transparent;
