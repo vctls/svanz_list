@@ -2,12 +2,15 @@
   // @ts-check
   import Header from "./lib/Header.svelte";
   import Item from "./lib/Item.svelte";
-  import store from "./lib/supabase_store";
+  import { store } from "./lib/supabase_store";
   import type ItemInterface from "./lib/ItemInterface";
   import { supabase } from "./lib/db";
 
   let name: string;
   let items: ItemInterface[] = [];
+  // Initialize the store to fetch the data from the remote database.
+  // This is necessary since the operation is asynchronous.
+  let promise = store.init();
 
   const sort = (): void => {
     items.sort((a, b) => {
@@ -27,6 +30,8 @@
     sort();
   });
 
+  // For some reason, subscription can't be done within the store.
+  // The channel is immediately closed.
   const subscription = supabase
     .channel("any")
     .on(
@@ -37,15 +42,14 @@
         table: "item",
       },
       (payload) => {
-        console.log("Changes received!", payload);
-        // TODO Do something with the changes.
         if (payload.eventType === "DELETE") {
           const index = getIndex(payload.old.id);
           if (index !== -1) {
-            items.splice(getIndex(payload.old.id), 1);
+            items.splice(index, 1);
             items = items;
           }
         }
+
         if (payload.eventType === "UPDATE") {
           const index = getIndex(payload.old.id);
           if (index !== -1) {
@@ -53,16 +57,23 @@
             items[index].done = payload.new.done;
           }
         }
+
         if (payload.eventType === "INSERT") {
-          items = [
-            { name: payload.new.name, done: false, id: payload.new.id },
-            ...items,
-          ];
+          const index = getIndex(payload.new.id);
+          if (index === -1) {
+            items = [
+              {
+                name: payload.new.name,
+                done: payload.new.done,
+                id: payload.new.id,
+              },
+              ...items,
+            ];
+          }
         }
       }
     )
     .subscribe();
-  console.log(subscription);
 
   const getIndex = (id: string): number => {
     return items.findIndex((item) => item.id === id);
@@ -74,7 +85,7 @@
       return;
     }
     const id = self.crypto.randomUUID();
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("item")
       .insert([{ id: id, name: name }]);
     if (error) {
@@ -86,10 +97,7 @@
   };
 
   const remove = async (id: string) => {
-    const { data, error } = await supabase
-      .from("item")
-      .delete()
-      .match({ id: id });
+    const { error } = await supabase.from("item").delete().match({ id: id });
     if (error) {
       console.log(error);
       return;
@@ -101,7 +109,7 @@
   const setDone = async (id: string) => {
     const index = getIndex(id);
     const item = items[index];
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("item")
       .update({ done: !item.done })
       .match({ id: id });
@@ -144,17 +152,23 @@
     <input bind:value={name} type="text" name="name" id="name" />
     <input type="submit" value="add" />
   </form>
-  <ul>
-    {#each items as item (item.name)}
-      <Item
-        filtered={filter(item, name)}
-        {item}
-        on:edit={editHandler}
-        on:remove={removeHandler}
-        on:done={doneHandler}
-      />
-    {/each}
-  </ul>
+  {#await promise}
+    <p>Loading...</p>
+  {:then}
+    <ul>
+      {#each items as item (item.id)}
+        <Item
+          filtered={filter(item, name)}
+          {item}
+          on:edit={editHandler}
+          on:remove={removeHandler}
+          on:done={doneHandler}
+        />
+      {/each}
+    </ul>
+  {:catch error}
+    <p>Something went wrong: {error.message}</p>
+  {/await}
 </main>
 
 <style>
